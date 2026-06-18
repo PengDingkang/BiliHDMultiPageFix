@@ -15,6 +15,7 @@ This module patches the playback page so those pages can be opened normally.
 - Target app: Bilibili HD
 - Package name: `tv.danmaku.bilibilihd`
 - Requires LSPosed or a compatible framework
+- Release APKs only support `arm64-v8a` devices
 - No launcher icon and no settings UI
 
 ### Supported Client Versions
