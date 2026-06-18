@@ -2,43 +2,149 @@ package org.hdhmc.bilihdpager.core
 
 import android.os.Bundle
 import dalvik.system.DexFile
+import org.luckypray.dexkit.DexKitBridge
+import org.luckypray.dexkit.query.enums.MatchType
 import java.lang.reflect.Field
 import java.lang.reflect.Modifier
+import kotlin.system.measureTimeMillis
 
 internal class FeatureLocator(
     private val classLoader: ClassLoader,
     private val logger: HookLogger,
+    private val hostApkPath: String? = null,
 ) {
     private val dexClassNames: List<String> by lazy { classLoader.dexClassNames() }
+    private var videoSourceCandidates: List<String>? = null
+    private var downloadControllerCandidates: List<String>? = null
+    private val selectorDataProviderCandidates = mutableMapOf<String, List<String>>()
 
     fun findSourceWrapperClass(
         videoDetailClass: Class<*>,
         videoClass: Class<*>,
-    ): Class<*>? = findFeatureClass("source wrapper") { clazz ->
-        clazz.hasNoArgConstructor() &&
-                clazz.hasVideoDetailInit(videoDetailClass) &&
-                clazz.hasVideoListMethods(videoClass) &&
-                clazz.hasSamePackageDelegateField(videoClass)
-    }
+    ): Class<*>? =
+        findFeatureClass(
+            description = "source wrapper",
+            dexKitCandidates = { findDexKitVideoSourceCandidates(videoDetailClass, videoClass) },
+        ) { clazz ->
+            clazz.hasNoArgConstructor() &&
+                    clazz.hasVideoDetailInit(videoDetailClass) &&
+                    clazz.hasVideoListMethods(videoClass) &&
+                    clazz.hasSamePackageDelegateField(videoClass)
+        }
 
     fun findNormalSourceClass(
         videoDetailClass: Class<*>,
         videoClass: Class<*>,
         sourceWrapperClass: Class<*>?,
-    ): Class<*>? = findFeatureClass("normal source") { clazz ->
-        clazz != sourceWrapperClass &&
-                clazz.hasNoArgConstructor() &&
-                clazz.hasVideoDetailInit(videoDetailClass) &&
-                clazz.hasVideoListMethods(videoClass) &&
-                clazz.hasListField() &&
-                clazz.hasVideoField(videoClass) &&
-                !clazz.hasSamePackageDelegateField(videoClass)
+    ): Class<*>? =
+        findFeatureClass(
+            description = "normal source",
+            dexKitCandidates = { findDexKitVideoSourceCandidates(videoDetailClass, videoClass) },
+        ) { clazz ->
+            clazz != sourceWrapperClass &&
+                    clazz.hasNoArgConstructor() &&
+                    clazz.hasVideoDetailInit(videoDetailClass) &&
+                    clazz.hasVideoListMethods(videoClass) &&
+                    clazz.hasListField() &&
+                    clazz.hasVideoField(videoClass) &&
+                    !clazz.hasSamePackageDelegateField(videoClass)
+        }
+
+    fun debugLogVideoSourceCandidates(
+        videoDetailClass: Class<*>,
+        videoClass: Class<*>,
+    ) {
+        if (!logger.isDebugEnabled) return
+        val candidates = findDexKitVideoSourceCandidates(videoDetailClass, videoClass)
+        val likelyCandidates = candidates.filter(::isLikelyObfuscatedTopLevelClass)
+        logger.debug {
+            "DexKit video source candidates: total=${candidates.size} " +
+                    "likely=${likelyCandidates.size} names=${likelyCandidates.take(20)}"
+        }
+    }
+
+    fun findDownloadControllerClass(
+        videoDetailClass: Class<*>,
+        downloadNormalCoreClass: Class<*>,
+        downloadSeasonCoreClass: Class<*>,
+    ): Class<*>? =
+        findFeatureClass(
+            description = "download controller",
+            dexKitCandidates = {
+                findDexKitDownloadControllerCandidates(
+                    videoDetailClass = videoDetailClass,
+                    downloadNormalCoreClass = downloadNormalCoreClass,
+                    downloadSeasonCoreClass = downloadSeasonCoreClass,
+                )
+            },
+        ) { clazz ->
+            clazz.findDeclaredMethodOrNull(
+                "g",
+                videoDetailClass,
+                java.lang.Long.TYPE,
+                downloadNormalCoreClass,
+                downloadSeasonCoreClass,
+            ) != null
+        }
+
+    fun debugLogDownloadControllerCandidates(
+        videoDetailClass: Class<*>,
+        downloadNormalCoreClass: Class<*>,
+        downloadSeasonCoreClass: Class<*>,
+    ) {
+        if (!logger.isDebugEnabled) return
+        val candidates = findDexKitDownloadControllerCandidates(
+            videoDetailClass = videoDetailClass,
+            downloadNormalCoreClass = downloadNormalCoreClass,
+            downloadSeasonCoreClass = downloadSeasonCoreClass,
+        )
+        val likelyCandidates = candidates.filter(::isLikelyObfuscatedTopLevelClass)
+        logger.debug {
+            "DexKit download controller candidates: total=${candidates.size} " +
+                    "likely=${likelyCandidates.size} names=${likelyCandidates.take(20)}"
+        }
+    }
+
+    fun findSelectorDataProviderClass(
+        playerServiceClasses: List<Class<*>>,
+    ): Class<*>? =
+        playerServiceClasses.firstNotNullOfOrNull { serviceClass ->
+            findFeatureClass(
+                description = "selector data provider (${serviceClass.name})",
+                dexKitCandidates = { findDexKitSelectorDataProviderCandidates(serviceClass) },
+            ) { clazz ->
+                clazz.findDeclaredMethodOrNull("b", serviceClass) != null &&
+                        clazz.findDeclaredMethodOrNull("c", serviceClass) != null &&
+                        clazz.findDeclaredMethodOrNull("g", serviceClass, Integer.TYPE) != null &&
+                        clazz.findDeclaredMethodOrNull("d") != null
+            }
+        }
+
+    fun debugLogSelectorDataProviderCandidates(
+        playerServiceClasses: List<Class<*>>,
+    ) {
+        if (!logger.isDebugEnabled) return
+        playerServiceClasses.forEach { serviceClass ->
+            val candidates = findDexKitSelectorDataProviderCandidates(serviceClass)
+            val likelyCandidates = candidates.filter(::isLikelyObfuscatedTopLevelClass)
+            logger.debug {
+                "DexKit selector data provider candidates for ${serviceClass.name}: " +
+                        "total=${candidates.size} likely=${likelyCandidates.size} " +
+                        "names=${likelyCandidates.take(20)}"
+            }
+        }
     }
 
     private fun findFeatureClass(
         description: String,
+        dexKitCandidates: (() -> List<String>)? = null,
         predicate: (Class<*>) -> Boolean,
     ): Class<*>? {
+        if (dexKitCandidates != null) {
+            val matchedByDexKit = findFeatureClassFromCandidates(description, dexKitCandidates, predicate)
+            if (matchedByDexKit != null) return matchedByDexKit
+        }
+
         if (dexClassNames.isEmpty()) {
             logger.debug { "Feature scan skipped for $description: no dex class names" }
             return null
@@ -64,6 +170,171 @@ internal class FeatureLocator(
             "Feature scan found no $description: scanned=$scanned dexClasses=${dexClassNames.size}"
         }
         return null
+    }
+
+    private fun findFeatureClassFromCandidates(
+        description: String,
+        candidatesProvider: () -> List<String>,
+        predicate: (Class<*>) -> Boolean,
+    ): Class<*>? {
+        val candidates = runCatching(candidatesProvider).getOrElse { error ->
+            logger.error("DexKit candidate scan failed for $description", error)
+            return null
+        }
+        if (candidates.isEmpty()) {
+            logger.debug { "DexKit found no candidates for $description" }
+            return null
+        }
+
+        var loaded = 0
+        candidates.asSequence()
+            .distinct()
+            .filter(::isLikelyObfuscatedTopLevelClass)
+            .forEach { className ->
+                val clazz = classLoader.findClassOrNull(className) ?: return@forEach
+                loaded += 1
+                val matched = runCatching { predicate(clazz) }.getOrDefault(false)
+                if (matched) {
+                    logger.debug {
+                        "DexKit matched $description: ${clazz.name} " +
+                                "(loaded=$loaded candidates=${candidates.size})"
+                    }
+                    return clazz
+                }
+            }
+
+        logger.debug {
+            "DexKit candidates did not validate for $description: " +
+                    "loaded=$loaded candidates=${candidates.size}; falling back to reflection scan"
+        }
+        return null
+    }
+
+    private fun findDexKitVideoSourceCandidates(
+        videoDetailClass: Class<*>,
+        videoClass: Class<*>,
+    ): List<String> {
+        videoSourceCandidates?.let { return it }
+        if (!DexKitLoader.ensureLoaded(logger)) return emptyList()
+
+        var candidates = emptyList<String>()
+        val elapsedMs = measureTimeMillis {
+            createDexKitBridge().use { bridge ->
+                val dexNum = runCatching { bridge.getDexNum() }.getOrDefault(-1)
+                val knownClasses = (Constants.SOURCE_WRAPPER_CLASSES + Constants.NORMAL_SOURCE_CLASSES)
+                    .filter { className -> runCatching { bridge.getClassData(className) != null }.getOrDefault(false) }
+                logger.debug {
+                    "DexKit bridge ready: source=${if (hostApkPath == null) "classLoader" else "apk"} " +
+                            "dexNum=$dexNum knownVideoSources=$knownClasses"
+                }
+                candidates = bridge.findClass {
+                    matcher {
+                        methods {
+                            matchType(MatchType.Contains)
+                            add {
+                                paramTypes(videoDetailClass.name, Bundle::class.java.name)
+                            }
+                        }
+                    }
+                }.map { it.name }
+            }
+        }
+        logger.debug {
+            "DexKit video source query completed: candidates=${candidates.size} elapsed=${elapsedMs}ms"
+        }
+        videoSourceCandidates = candidates
+        return candidates
+    }
+
+    private fun findDexKitDownloadControllerCandidates(
+        videoDetailClass: Class<*>,
+        downloadNormalCoreClass: Class<*>,
+        downloadSeasonCoreClass: Class<*>,
+    ): List<String> {
+        downloadControllerCandidates?.let { return it }
+        if (!DexKitLoader.ensureLoaded(logger)) return emptyList()
+
+        var candidates = emptyList<String>()
+        val elapsedMs = measureTimeMillis {
+            createDexKitBridge().use { bridge ->
+                candidates = bridge.findClass {
+                    matcher {
+                        methods {
+                            matchType(MatchType.Contains)
+                            add {
+                                paramTypes(
+                                    videoDetailClass,
+                                    java.lang.Long.TYPE,
+                                    downloadNormalCoreClass,
+                                    downloadSeasonCoreClass,
+                                )
+                            }
+                        }
+                    }
+                }.map { it.name }
+            }
+        }
+        logger.debug {
+            "DexKit download controller query completed: candidates=${candidates.size} elapsed=${elapsedMs}ms"
+        }
+        downloadControllerCandidates = candidates
+        return candidates
+    }
+
+    private fun findDexKitSelectorDataProviderCandidates(
+        serviceClass: Class<*>,
+    ): List<String> {
+        selectorDataProviderCandidates[serviceClass.name]?.let { return it }
+        if (!DexKitLoader.ensureLoaded(logger)) return emptyList()
+
+        var candidates = emptyList<String>()
+        val elapsedMs = measureTimeMillis {
+            createDexKitBridge().use { bridge ->
+                candidates = bridge.findClass {
+                    matcher {
+                        methods {
+                            matchType(MatchType.Contains)
+                            add {
+                                paramTypes(serviceClass)
+                            }
+                            add {
+                                paramTypes(serviceClass, Integer.TYPE)
+                            }
+                            add {
+                                paramTypes()
+                            }
+                        }
+                    }
+                }.map { it.name }
+            }
+        }
+        logger.debug {
+            "DexKit selector data provider query completed for ${serviceClass.name}: " +
+                    "candidates=${candidates.size} elapsed=${elapsedMs}ms"
+        }
+        selectorDataProviderCandidates[serviceClass.name] = candidates
+        return candidates
+    }
+
+    private fun createDexKitBridge(): DexKitBridge =
+        hostApkPath
+            ?.takeIf { it.isNotBlank() }
+            ?.let { DexKitBridge.create(it) }
+            ?: DexKitBridge.create(classLoader, true)
+}
+
+private object DexKitLoader {
+    private var loaded: Boolean? = null
+
+    @Synchronized
+    fun ensureLoaded(logger: HookLogger): Boolean {
+        loaded?.let { return it }
+        loaded = runCatching {
+            System.loadLibrary("dexkit")
+        }.onFailure { error ->
+            logger.error("DexKit library load failed; falling back to reflection feature scan", error)
+        }.isSuccess
+        return loaded == true
     }
 }
 

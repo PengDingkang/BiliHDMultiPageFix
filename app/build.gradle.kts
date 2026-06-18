@@ -100,6 +100,8 @@ android {
 }
 
 dependencies {
+    implementation(libs.dexkit)
+
     add("legacyCompileOnly", libs.xposed.legacy)
     add("modernApi102CompileOnly", libs.libxposed.api)
 }

@@ -50,7 +50,7 @@ class ModernEntry : XposedModule() {
         val videoDetailClass = classLoader.findClassOrNull(Constants.VIDEO_DETAIL_CLASS)
         val videoClass = classLoader.findClassOrNull(Constants.VIDEO_CLASS)
         val featureLocator = if (videoDetailClass != null && videoClass != null) {
-            FeatureLocator(classLoader, logger)
+            FeatureLocator(classLoader, logger, param.applicationInfo.sourceDir)
         } else {
             null
         }
@@ -65,6 +65,14 @@ class ModernEntry : XposedModule() {
             null
         }
         val knownNormalSourceClass = classLoader.findFirstClassOrNull(Constants.NORMAL_SOURCE_CLASSES)
+        if (
+            featureLocator != null &&
+            videoDetailClass != null &&
+            videoClass != null &&
+            (knownSourceWrapperClass == null || knownNormalSourceClass == null)
+        ) {
+            featureLocator.debugLogVideoSourceCandidates(videoDetailClass, videoClass)
+        }
         val normalSourceClass = knownNormalSourceClass ?: if (
             featureLocator != null &&
             videoDetailClass != null &&
@@ -79,12 +87,39 @@ class ModernEntry : XposedModule() {
             classLoader.findClassOrNull(Constants.DOWNLOAD_SEASON_CONTAINER_CLASS)
         val downloadCallbackClass = classLoader.findClassOrNull(Constants.DOWNLOAD_CALLBACK_CLASS)
         val downloadClientClass = classLoader.findClassOrNull(Constants.DOWNLOAD_CLIENT_CLASS)
-        val downloadControllerClass =
-            classLoader.findFirstClassOrNull(Constants.DOWNLOAD_CONTROLLER_CLASSES)
         val downloadNormalCoreClass =
             classLoader.findClassOrNull(Constants.DOWNLOAD_NORMAL_CORE_CLASS)
         val downloadSeasonCoreClass =
             classLoader.findClassOrNull(Constants.DOWNLOAD_SEASON_CORE_CLASS)
+        val knownDownloadControllerClass =
+            classLoader.findFirstClassOrNull(Constants.DOWNLOAD_CONTROLLER_CLASSES)
+        val downloadControllerClass = knownDownloadControllerClass ?: if (
+            featureLocator != null &&
+            videoDetailClass != null &&
+            downloadNormalCoreClass != null &&
+            downloadSeasonCoreClass != null
+        ) {
+            featureLocator.findDownloadControllerClass(
+                videoDetailClass = videoDetailClass,
+                downloadNormalCoreClass = downloadNormalCoreClass,
+                downloadSeasonCoreClass = downloadSeasonCoreClass,
+            )
+        } else {
+            null
+        }
+        if (
+            featureLocator != null &&
+            videoDetailClass != null &&
+            downloadNormalCoreClass != null &&
+            downloadSeasonCoreClass != null &&
+            knownDownloadControllerClass == null
+        ) {
+            featureLocator.debugLogDownloadControllerCandidates(
+                videoDetailClass = videoDetailClass,
+                downloadNormalCoreClass = downloadNormalCoreClass,
+                downloadSeasonCoreClass = downloadSeasonCoreClass,
+            )
+        }
         val downloadNormalProviderClass =
             classLoader.findClassOrNull(Constants.DOWNLOAD_NORMAL_PROVIDER_CLASS)
         val introductionDetailFragmentClass =
@@ -94,8 +129,23 @@ class ModernEntry : XposedModule() {
             classLoader.findFirstClassOrNull(Constants.FULLSCREEN_SEASON_SELECTOR_CLASSES)
         val fullscreenSelectorCallbackClass =
             classLoader.findFirstClassOrNull(Constants.FULLSCREEN_SELECTOR_CALLBACK_CLASSES)
-        val selectorDataProviderClass =
+        val knownSelectorDataProviderClass =
             classLoader.findFirstClassOrNull(Constants.SELECTOR_DATA_PROVIDER_CLASSES)
+        val selectorDataProviderClass = knownSelectorDataProviderClass ?: if (
+            featureLocator != null &&
+            playerServiceClasses.isNotEmpty()
+        ) {
+            featureLocator.findSelectorDataProviderClass(playerServiceClasses)
+        } else {
+            null
+        }
+        if (
+            featureLocator != null &&
+            playerServiceClasses.isNotEmpty() &&
+            knownSelectorDataProviderClass == null
+        ) {
+            featureLocator.debugLogSelectorDataProviderCandidates(playerServiceClasses)
+        }
         val selectorItemClass = classLoader.findClassOrNull(Constants.SELECTOR_ITEM_CLASS)
         val sourceTypeClass = classLoader.findClassOrNull(Constants.SOURCE_TYPE_CLASS)
         val normalSourceType = sourceTypeClass?.getStaticObjectFieldOrNull("TypeNormal")

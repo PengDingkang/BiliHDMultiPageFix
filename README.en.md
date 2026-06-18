@@ -23,9 +23,9 @@ This module patches the playback page so those pages can be opened normally.
 | --- | --- | --- |
 | `1.38.0` | Tested | Playback page, fullscreen page selector, and cache page selector verified |
 | `1.47.0` | Tested | Playback page, fullscreen page selector, and cache page selector verified |
-| Other versions | Best effort | The module will try to match obfuscated playback source classes automatically, but support is not guaranteed |
+| Other versions | Best effort | The module will try to match obfuscated playback source, cache, and selector classes automatically, but support is not guaranteed |
 
-Obfuscated class names can change between Bilibili HD releases. For unlisted versions, please include LSPosed logs and the client version when reporting issues.
+Obfuscated class and method names can change between Bilibili HD releases. For unlisted versions, please include LSPosed logs and the client version when reporting issues.
 
 This module only fixes multi-page switching. It does not unlock paid content, region-restricted content, quality limits, or account permissions.
 

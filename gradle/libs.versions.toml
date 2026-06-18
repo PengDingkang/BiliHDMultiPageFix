@@ -1,5 +1,6 @@
 [versions]
 agp = "9.1.1"
+dexkit = "2.2.0"
 xposed-legacy = "82"
 libxposed = "102.0.0"
 
@@ -7,5 +8,6 @@ libxposed = "102.0.0"
 agp-app = { id = "com.android.application", version.ref = "agp" }
 
 [libraries]
+dexkit = { module = "org.luckypray:dexkit", version.ref = "dexkit" }
 xposed-legacy = { module = "de.robv.android.xposed:api", version.ref = "xposed-legacy" }
 libxposed-api = { module = "io.github.libxposed:api", version.ref = "libxposed" }
