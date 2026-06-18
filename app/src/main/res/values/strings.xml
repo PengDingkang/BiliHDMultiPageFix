@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BiliHDPager</string>
+    <string name="xposed_description">修复哔哩哔哩 HD 旧客户端部分合集稿件无法正常切换分 P 的问题</string>
+</resources>
