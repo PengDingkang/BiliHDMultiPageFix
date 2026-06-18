@@ -12,25 +12,26 @@ jobs:
   debug:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: "17"
-      - uses: gradle/actions/setup-gradle@v4
+          java-version: "21"
+      - uses: android-actions/setup-android@v4
+      - uses: gradle/actions/setup-gradle@v6
       - name: Read version
         run: |
           VERSION_NAME="$(sed -n 's/^appVersionName=//p' gradle.properties)"
           echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
       - name: Build debug APKs
-        run: ./gradlew :app:assembleLegacyDebug :app:assembleModernApi102Debug
+        run: ./gradlew :app:assembleLegacyDebug :app:assembleModernApi102Debug --no-daemon
       - name: Prepare debug artifacts
         run: |
           mkdir -p dist
           cp app/build/outputs/apk/legacy/debug/app-legacy-debug.apk "dist/BiliHDPager-${VERSION_NAME}-legacy-debug.apk"
           cp app/build/outputs/apk/modernApi102/debug/app-modernApi102-debug.apk "dist/BiliHDPager-${VERSION_NAME}-modern-api102-debug.apk"
       - name: Upload debug APKs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: BiliHDPager-debug
           path: dist/*.apk

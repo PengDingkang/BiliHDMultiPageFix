@@ -3,7 +3,6 @@ import java.util.Properties
 
 plugins {
     alias(libs.plugins.agp.app)
-    alias(libs.plugins.kotlin.android)
 }
 
 val localProperties = Properties().apply {
@@ -36,12 +35,14 @@ val appVersionCode = providers.gradleProperty("appVersionCode").get().toInt()
 
 android {
     namespace = "org.hdhmc.bilihdpager"
-    compileSdk = 35
+    compileSdk {
+        version = release(37)
+    }
 
     defaultConfig {
         applicationId = "org.hdhmc.bilihdpager"
         minSdk = 23
-        targetSdk = 35
+        targetSdk = 37
         // versionCode = major * 10000 + minor * 100 + patch
         versionCode = appVersionCode
         versionName = appVersionName
@@ -89,15 +90,6 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
-    }
-
-    kotlinOptions {
-        jvmTarget = "11"
-        freeCompilerArgs = listOf(
-            "-Xno-param-assertions",
-            "-Xno-call-assertions",
-            "-Xno-receiver-assertions",
-        )
     }
 
     packaging {
