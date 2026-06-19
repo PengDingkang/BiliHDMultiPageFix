@@ -32,6 +32,9 @@ val hasReleaseSigning = listOf(
 ).all { !it.isNullOrBlank() }
 val appVersionName = providers.gradleProperty("appVersionName").get()
 val appVersionCode = providers.gradleProperty("appVersionCode").get().toInt()
+val useFlavorVersionNameSuffix = providers.gradleProperty("useFlavorVersionNameSuffix")
+    .map(String::toBoolean)
+    .orElse(true)
 
 android {
     namespace = "org.hdhmc.bilihdpager"
@@ -52,12 +55,16 @@ android {
     productFlavors {
         create("legacy") {
             dimension = "api"
-            versionNameSuffix = "-legacy"
+            if (useFlavorVersionNameSuffix.get()) {
+                versionNameSuffix = "-legacy"
+            }
         }
         create("modernApi102") {
             dimension = "api"
             minSdk = 26
-            versionNameSuffix = "-modern-api102"
+            if (useFlavorVersionNameSuffix.get()) {
+                versionNameSuffix = "-modern-api102"
+            }
         }
     }
 
