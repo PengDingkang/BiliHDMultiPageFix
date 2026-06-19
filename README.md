@@ -34,8 +34,8 @@
 
 | 你的 LSPosed 版本 | 推荐 APK |
 | --- | --- |
-| v2.1.0 (7769) 或更新版本 | `BiliHDPager-0.1.0-modern-api102.apk` |
-| 早于 v2.1.0 (7769) | `BiliHDPager-0.1.0-legacy.apk` |
+| v2.1.0 (7769) 或更新版本 | `BiliHDPager-<version>-modern-api102.apk` |
+| 早于 v2.1.0 (7769) | `BiliHDPager-<version>-legacy.apk` |
 
 不要同时安装两个版本。如果不确定自己的 LSPosed 版本，请先在 LSPosed 设置里查看版本号。
 

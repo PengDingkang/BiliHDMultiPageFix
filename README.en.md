@@ -34,8 +34,8 @@ This module only fixes multi-page switching. It does not unlock paid content, re
 
 | Your LSPosed version | Recommended APK |
 | --- | --- |
-| v2.1.0 (7769) or newer | `BiliHDPager-0.1.0-modern-api102.apk` |
-| Older than v2.1.0 (7769) | `BiliHDPager-0.1.0-legacy.apk` |
+| v2.1.0 (7769) or newer | `BiliHDPager-<version>-modern-api102.apk` |
+| Older than v2.1.0 (7769) | `BiliHDPager-<version>-legacy.apk` |
 
 Do not install both variants at the same time. If you are not sure which LSPosed version you use, check it in LSPosed first.
 
