@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.1] - 2026-06-19
+
+- 调整发布构建流程，支持为 Xposed Modules Repo 生成统一 manifest `versionName` 的 APK。
+- 保持常规构建的 legacy / modern-api102 版本名后缀不变，仅在发布仓库 CI 中关闭后缀。
+
 ## [0.1.0] - 2026-06-18
 
 - 首个公开版本。
