@@ -2,8 +2,11 @@
 
 ## [0.1.1] - 2026-06-19
 
-- 调整发布构建流程，支持为 Xposed Modules Repo 生成统一 manifest `versionName` 的 APK。
-- 保持常规构建的 legacy / modern-api102 版本名后缀不变，仅在发布仓库 CI 中关闭后缀。
+- 首次同步到 Xposed Modules Repo。功能与源码仓库 `0.1.0` 发布相同，修复旧版哔哩哔哩 HD 分 P 播放页、全屏选集和缓存选集问题。
+- 已验证哔哩哔哩 HD `1.38.0` 和 `1.47.0`；其他版本继续尝试自动匹配混淆后的相关类。
+- 发布仓库构建的 legacy / modern-api102 APK 现在使用统一 manifest `versionName`，便于 LSPosed 仓库按 `101-0.1.1` 正确索引。
+- README 中的 APK 文件名说明改为版本无关写法，避免后续版本显示过期文件名。
+- 源码仓库 CI 现在会跳过纯 Markdown 文档变更，减少无意义的 debug 构建。
 
 ## [0.1.0] - 2026-06-18
 
