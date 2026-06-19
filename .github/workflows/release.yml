@@ -4,9 +4,29 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Release version, for example 0.1.0
+        description: Release version, for example 0.1.1
         required: true
         type: string
+      publish_source_release:
+        description: Create the source repository release
+        required: true
+        default: true
+        type: boolean
+      unified_manifest_version_name:
+        description: Build source release APKs with unified manifest versionName
+        required: true
+        default: false
+        type: boolean
+      publish_xposed_release:
+        description: Also publish to Xposed-Modules-Repo/org.hdhmc.bilihdpager
+        required: true
+        default: false
+        type: boolean
+      xposed_prerelease:
+        description: Mark the Xposed repository release as prerelease
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -20,6 +40,8 @@ jobs:
       RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
       RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
       RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+      XPOSED_REPOSITORY: Xposed-Modules-Repo/org.hdhmc.bilihdpager
+      XPOSED_REPO_TOKEN: ${{ secrets.XPOSED_REPO_TOKEN }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -37,15 +59,28 @@ jobs:
           test -n "$VERSION_NAME"
           test -n "$VERSION_CODE"
           test "$VERSION_NAME" = "${{ inputs.version }}"
+          if [ "${{ inputs.publish_source_release }}" != "true" ] && [ "${{ inputs.publish_xposed_release }}" != "true" ]; then
+            echo "Nothing to publish"
+            exit 1
+          fi
           TAG_NAME="v$VERSION_NAME"
+          XPOSED_TAG_NAME="${VERSION_CODE}-${VERSION_NAME}"
           git fetch --tags --force
-          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+          if [ "${{ inputs.publish_source_release }}" = "true" ] && git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
             echo "Tag $TAG_NAME already exists"
             exit 1
+          fi
+          if [ "${{ inputs.publish_xposed_release }}" = "true" ]; then
+            test -n "$XPOSED_REPO_TOKEN"
+            if GH_TOKEN="$XPOSED_REPO_TOKEN" gh release view "$XPOSED_TAG_NAME" --repo "$XPOSED_REPOSITORY" >/dev/null 2>&1; then
+              echo "Xposed release $XPOSED_TAG_NAME already exists"
+              exit 1
+            fi
           fi
           echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
           echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
           echo "TAG_NAME=$TAG_NAME" >> "$GITHUB_ENV"
+          echo "XPOSED_TAG_NAME=$XPOSED_TAG_NAME" >> "$GITHUB_ENV"
       - name: Check release signing secrets
         run: |
           test -n "$RELEASE_KEYSTORE_BASE64"
@@ -64,7 +99,12 @@ jobs:
       - name: Restore release keystore
         run: echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > "$RELEASE_STORE_FILE"
       - name: Build release APKs
-        run: ./gradlew :app:assembleLegacyRelease :app:assembleModernApi102Release --no-daemon
+        run: |
+          USE_SUFFIX=true
+          if [ "${{ inputs.unified_manifest_version_name }}" = "true" ]; then
+            USE_SUFFIX=false
+          fi
+          ./gradlew :app:assembleLegacyRelease :app:assembleModernApi102Release --no-daemon -PuseFlavorVersionNameSuffix="$USE_SUFFIX"
       - name: Prepare release artifacts
         run: |
           mkdir -p dist
@@ -76,16 +116,72 @@ jobs:
           test -x "$APKSIGNER"
           "$APKSIGNER" verify --print-certs "dist/BiliHDPager-${VERSION_NAME}-legacy.apk"
           "$APKSIGNER" verify --print-certs "dist/BiliHDPager-${VERSION_NAME}-modern-api102.apk"
+      - name: Build Xposed release APKs
+        if: ${{ inputs.publish_xposed_release }}
+        run: ./gradlew :app:assembleLegacyRelease :app:assembleModernApi102Release --no-daemon -PuseFlavorVersionNameSuffix=false
+      - name: Prepare Xposed release artifacts
+        if: ${{ inputs.publish_xposed_release }}
+        run: |
+          mkdir -p dist-xposed
+          cp app/build/outputs/apk/legacy/release/app-legacy-release.apk "dist-xposed/BiliHDPager-${VERSION_NAME}-legacy.apk"
+          cp app/build/outputs/apk/modernApi102/release/app-modernApi102-release.apk "dist-xposed/BiliHDPager-${VERSION_NAME}-modern-api102.apk"
+      - name: Verify Xposed APK metadata and signatures
+        if: ${{ inputs.publish_xposed_release }}
+        run: |
+          AAPT="$(find "$ANDROID_HOME/build-tools" -name aapt2 | sort -V | tail -n 1)"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -n 1)"
+          test -x "$AAPT"
+          test -x "$APKSIGNER"
+          for apk in dist-xposed/*.apk; do
+            echo "Checking $apk"
+            BADGING="$("$AAPT" dump badging "$apk" | head -n 1)"
+            echo "$BADGING"
+            echo "$BADGING" | grep "name='org.hdhmc.bilihdpager'"
+            echo "$BADGING" | grep "versionCode='$VERSION_CODE'"
+            echo "$BADGING" | grep "versionName='$VERSION_NAME'"
+            "$APKSIGNER" verify --print-certs "$apk"
+          done
+      - name: Generate Xposed release notes
+        if: ${{ inputs.publish_xposed_release }}
+        run: |
+          {
+            echo "### APK 选择"
+            echo
+            echo "- \`BiliHDPager-${VERSION_NAME}-modern-api102.apk\`: 推荐用于 LSPosed v2.1.0(7769) 及以上。"
+            echo "- \`BiliHDPager-${VERSION_NAME}-legacy.apk\`: 用于旧版 LSPosed 环境。"
+            echo
+            echo "### 更新内容"
+            cat release_notes.md
+            echo
+            echo "Source: https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
+          } > xposed_release_notes.md
       - name: Create and push tag
+        if: ${{ inputs.publish_source_release }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
           git push origin "$TAG_NAME"
       - name: Create GitHub release
+        if: ${{ inputs.publish_source_release }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG_NAME }}
           name: BiliHDPager ${{ env.VERSION_NAME }}
           body_path: release_notes.md
           files: dist/*.apk
+      - name: Create Xposed repository release
+        if: ${{ inputs.publish_xposed_release }}
+        env:
+          GH_TOKEN: ${{ secrets.XPOSED_REPO_TOKEN }}
+        run: |
+          PRERELEASE_ARGS=()
+          if [ "${{ inputs.xposed_prerelease }}" = "true" ]; then
+            PRERELEASE_ARGS+=(--prerelease)
+          fi
+          gh release create "$XPOSED_TAG_NAME" dist-xposed/*.apk \
+            --repo "$XPOSED_REPOSITORY" \
+            --target main \
+            --title "$VERSION_NAME" \
+            --notes-file xposed_release_notes.md \
+            "${PRERELEASE_ARGS[@]}"
